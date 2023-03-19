@@ -97,7 +97,11 @@ def plot_stats(stats):
     util = [stat[1] for stat in stats]
     num  = [stat[2] for stat in stats]
 
+    mean_util = sum(util) / len(util)
+    mean_num  = sum(num)  / len(num)
+
     fig = plt.scatter(util, num, s=50, alpha=0.5)
+    fig = plt.scatter([mean_util], [mean_num], s=50, alpha=0.5, color='red')
     plt.title(f"{placement_policy.name}")
     plt.xlabel("utilization")
     plt.ylabel("Num of rectangles")
@@ -125,5 +129,5 @@ def multiple_runs(NUM_RUNS=None):
     dump_stats(stats)
 
 if __name__ == '__main__':
-    run(visualize=True, seed=None)
+    run(visualize=True, seed=8027613686809405079)
     # multiple_runs()

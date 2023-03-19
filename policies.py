@@ -1,6 +1,7 @@
 import random
 from base import *
 from app import Container
+import numpy as np
 
 class RandomizedPolicy(Container):
     name = "random"
@@ -131,3 +132,175 @@ class BottomLeftPolicy(Container):
             if rect.y + rect.height > y:
                 y = rect.y + rect.height
         return x, y
+
+class CustomPolicy(Container):
+    '''
+    Custom policy has specific lanes for each height
+    '''
+    name = "custom"
+    def __init__(self, *args, **kwargs):
+        self.policy = self.fixed_lane_packing
+
+        self.strip_grouping   = [[12,4], [11,5], [10,6], [9,7], [8,8],  [16],[16],[16]]
+        self.LARGEST_STRIP_GRP_INDEX = 5 # 16 blocks
+        self.NUM_STRIP_GROUPS = 8
+
+        self.strip_heights           = [ 12, 4,  11,  5,  10,  6,  9, 7,  8,  8, 16, 16,16]
+        self.strip_alternate_heights = [[11],[],[10],[4],[9],[5],[8],[6],[7],[7], [],[],[]]
+
+        self.strip_height_off = [0]+list(np.cumsum(self.strip_heights)[:-1])
+        self.occupied_strip_width = [0 for _ in range(len(self.strip_heights))]
+        self.invalid_range    = [None for _ in range(len(self.strip_heights))]
+    
+        self.NUM_STRIPS = len(self.strip_heights)
+        self.LATEST_STRIP_OFF = 0
+    
+        super(CustomPolicy, self).__init__(*args, **kwargs)
+
+    def native_search(self,rectangle):
+        if rectangle.height in [13,14,15]:
+            rec_height = 16
+        else:
+            rec_height = rectangle.height
+        
+        for strip_num, strip_h in enumerate(self.strip_heights):
+            # if the height of the rectangle is the lane height and there is space to fit
+            if (strip_h == rec_height):
+                ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
+                if ret is not (None, None):
+                    return ret
+
+        return None, None
+
+    def check_if_rect_fits_in_strip(self, strip_num, rectangle):
+        if self.invalid_range[strip_num] is not None:
+            #BEFORE THE INVALID BLOCK
+            if(self.occupied_strip_width[strip_num] + rectangle.width < self.invalid_range[strip_num][0]):
+                return strip_num, -1
+            #AFTER THE INVALID BLOCK
+            if(self.invalid_range[strip_num][1] + rectangle.width < self.width):
+                return strip_num, 1
+        else:
+            #NO INVALID BLOCK PRESENT
+            if(self.occupied_strip_width[strip_num] + rectangle.width < self.width):
+                return strip_num, None
+        return None, None
+    
+    def equi_fill_search(self, rectangle):
+        if rectangle.height in [13,14,15]:
+            rec_height = 16
+        else:
+            rec_height = rectangle.height
+        
+        possible_strip_index = []
+        #regular strip heights
+        for strip_num, strip_h in enumerate(self.strip_heights):
+            if strip_h == rec_height:
+                ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
+                if ret is not (None, None):
+                    possible_strip_index.append(strip_num)
+                
+        #alternate strip heights
+        for strip_num, strip_h_l in enumerate(self.strip_alternate_heights):
+            for strip_h in strip_h_l:
+                if strip_h == rec_height:
+                    ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
+                    if ret is not (None, None):
+                        #ignore blocks in which invalid block is present
+                        # if (ret[1] is None or (ret[1] is not None and ret[1]<0)):
+                        possible_strip_index.append(strip_num)
+        
+        if len(possible_strip_index) != 0:
+            #compare fill percentage among options - get the  strip with min fill percent
+            min_strip_index = possible_strip_index[0]
+            fill_precent    = self.occupied_strip_width[min_strip_index]
+            for strip_num in possible_strip_index:
+                if fill_precent > self.occupied_strip_width[strip_num]:
+                    min_strip_index = strip_num
+                    fill_precent    = self.occupied_strip_width[strip_num]
+
+            return self.check_if_rect_fits_in_strip(min_strip_index, rectangle)
+
+        return None, None
+
+    def alternate_search(self, rectangle):
+        for strip_grp_num, values_l in enumerate(self.strip_grouping):
+            if len(values_l) == 2:
+                # if even strip has invalid
+                if self.invalid_range[strip_grp_num*2] is not None:
+                    strip_occupied_e = self.invalid_range[strip_grp_num*2][1]
+                else:
+                    strip_occupied_e = self.occupied_strip_width[strip_grp_num*2]
+                
+                # if odd strip has invalid
+                if self.invalid_range[strip_grp_num*2+1] is not None:
+                    strip_occupied_o = self.invalid_range[strip_grp_num*2+1][1]
+                else:
+                    strip_occupied_o = self.occupied_strip_width[strip_grp_num*2+1]
+
+                max_occupied_width = max(strip_occupied_e, strip_occupied_o)
+                if (rectangle.width < self.width - max_occupied_width):
+                    return strip_grp_num
+            else: #fill into 16 blocks
+                index = strip_grp_num - self.NUM_STRIP_GROUPS
+                if (rectangle.width < self.width - self.occupied_strip_width[index]):
+                    print("placing in 16 blocks at ", index)
+                    return strip_grp_num
+
+        return None
+    
+    def fixed_lane_packing(self, rectangle):
+        max_x = self.width - rectangle.width
+        max_y = self.height - rectangle.height
+        if max_x < 0 or max_y < 0:
+            return None, None  # Rectangle is too large to fit
+
+        strip_num, loc = self.equi_fill_search(rectangle)
+        print(rectangle.height, strip_num)
+        if strip_num is not None:
+            # A strip is found.
+            if (loc == None or loc<0):
+                # (1) there is no invalid range in the strip, place the rect regularly
+                # (2) we are placing the new block before the invalid range
+                occupied_strip_width = self.occupied_strip_width[strip_num]
+                self.occupied_strip_width[strip_num] = self.occupied_strip_width[strip_num] + rectangle.width
+                return occupied_strip_width, self.strip_height_off[strip_num]
+            elif(loc>0):
+                #extend the invalid range and dont change the occupied_strip_width for the strip
+                starting_pt = self.invalid_range[strip_num][1]
+                self.invalid_range[strip_num][1] = self.invalid_range[strip_num][1] + rectangle.width
+                return starting_pt, self.strip_height_off[strip_num]
+
+
+        strip_grp_num = self.alternate_search(rectangle)
+        print("ALTERNATE", rectangle.height, strip_grp_num)
+        if strip_grp_num is not None:
+            if strip_grp_num < self.LARGEST_STRIP_GRP_INDEX:
+                even_row_num, odd_row_num = 2*strip_grp_num, 2*strip_grp_num+1
+
+                if self.occupied_strip_width[strip_grp_num*2] > self.occupied_strip_width[strip_grp_num*2+1]:
+                    #even strip is longer
+                    longer_strip = strip_grp_num*2
+                    other_strip = strip_grp_num*2 + 1
+                else:
+                    #odd strip is longer
+                    other_strip = strip_grp_num*2
+                    longer_strip = strip_grp_num*2 + 1
+
+                max_occupied_width = self.occupied_strip_width[longer_strip]
+
+                if self.invalid_range[other_strip] is None:
+                    #there was no invalid block in this strip, earlier
+                    self.invalid_range[other_strip] = [max_occupied_width, max_occupied_width + rectangle.width]
+                else:
+                    self.invalid_range[other_strip][1] += rectangle.width
+                self.occupied_strip_width[longer_strip] = max_occupied_width + rectangle.width
+
+                return max_occupied_width, self.strip_height_off[even_row_num]
+            else: # 16 blocks
+                index = strip_grp_num - self.NUM_STRIP_GROUPS
+                max_occupied_width = self.occupied_strip_width[index]
+                self.occupied_strip_width[index] = max_occupied_width + rectangle.width
+                return max_occupied_width, self.strip_height_off[index]
+
+        return None, None
