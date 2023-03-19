@@ -175,14 +175,14 @@ class CustomPolicy(Container):
     def check_if_rect_fits_in_strip(self, strip_num, rectangle):
         if self.invalid_range[strip_num] is not None:
             #BEFORE THE INVALID BLOCK
-            if(self.occupied_strip_width[strip_num] + rectangle.width < self.invalid_range[strip_num][0]):
+            if(self.occupied_strip_width[strip_num] + rectangle.width <= self.invalid_range[strip_num][0]):
                 return strip_num, -1
             #AFTER THE INVALID BLOCK
-            if(self.invalid_range[strip_num][1] + rectangle.width < self.width):
+            if(self.invalid_range[strip_num][1] + rectangle.width <= self.width):
                 return strip_num, 1
         else:
             #NO INVALID BLOCK PRESENT
-            if(self.occupied_strip_width[strip_num] + rectangle.width < self.width):
+            if(self.occupied_strip_width[strip_num] + rectangle.width <= self.width):
                 return strip_num, None
         return None, None
     
@@ -239,11 +239,11 @@ class CustomPolicy(Container):
                     strip_occupied_o = self.occupied_strip_width[strip_grp_num*2+1]
 
                 max_occupied_width = max(strip_occupied_e, strip_occupied_o)
-                if (rectangle.width < self.width - max_occupied_width):
+                if (rectangle.width <= self.width - max_occupied_width):
                     return strip_grp_num
             else: #fill into 16 blocks
                 index = strip_grp_num - self.NUM_STRIP_GROUPS
-                if (rectangle.width < self.width - self.occupied_strip_width[index]):
+                if (rectangle.width <= self.width - self.occupied_strip_width[index]):
                     print("placing in 16 blocks at ", index)
                     return strip_grp_num
 
