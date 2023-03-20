@@ -172,7 +172,7 @@ class CustomPolicy(Container):
             # if the height of the rectangle is the lane height and there is space to fit
             if (strip_h == rec_height):
                 ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
-                if ret is not (None, None):
+                if ret != (None, None):
                     return ret
 
         return None, None
@@ -217,7 +217,7 @@ class CustomPolicy(Container):
             if strip_h == rec_height:
                 self.perf_counters['EQUIFILL']['NATIVE']      += 1
                 ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
-                if ret is not (None, None):
+                if ret != (None, None):
                     possible_strip_index.append(strip_num)
                 
         #alternate strip heights SEARCH
@@ -226,7 +226,7 @@ class CustomPolicy(Container):
                 if strip_h == rec_height:
                     self.perf_counters['EQUIFILL']['ALTERNATE']      += 1
                     ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
-                    if ret is not (None, None):
+                    if ret != (None, None):
                         #ignore blocks in which invalid block is present - NOT NEEDED
                         # if (ret[1] is None or (ret[1] is not None and ret[1]<0)):
                         possible_strip_index.append(strip_num)
@@ -312,23 +312,29 @@ class CustomPolicy(Container):
             if strip_grp_num < self.LARGEST_STRIP_GRP_INDEX:
                 even_row_num, odd_row_num = 2*strip_grp_num, 2*strip_grp_num+1
 
-                if self.occupied_strip_width[strip_grp_num*2] > self.occupied_strip_width[strip_grp_num*2+1]:
-                    #even strip is longer
-                    longer_strip = strip_grp_num*2
-                    other_strip = strip_grp_num*2 + 1
+                if self.invalid_range[even_row_num] is not None:
+                    strip_fill_even = self.invalid_range[even_row_num][1]   #end of invalid
                 else:
-                    #odd strip is longer
-                    other_strip = strip_grp_num*2
-                    longer_strip = strip_grp_num*2 + 1
-
-                max_occupied_width = self.occupied_strip_width[longer_strip]
-
-                if self.invalid_range[other_strip] is None:
-                    #there was no invalid block in this strip, earlier
-                    self.invalid_range[other_strip] = [max_occupied_width, max_occupied_width + rectangle.width]
+                    strip_fill_even = self.occupied_strip_width[even_row_num]
+                if self.invalid_range[odd_row_num] is not None:
+                    strip_fill_odd = self.invalid_range[odd_row_num][1]    #end of invalid
                 else:
-                    self.invalid_range[other_strip][1] += rectangle.width
-                self.occupied_strip_width[longer_strip] = max_occupied_width + rectangle.width
+                    strip_fill_odd = self.occupied_strip_width[odd_row_num]
+
+                max_occupied_width = max(strip_fill_odd, strip_fill_even)
+                
+                #update both the strips in the group
+                for index in [even_row_num, odd_row_num]:
+                    if self.invalid_range[index] is not None:
+                        self.invalid_range[index][1] += rectangle.width
+                    else:
+                        # no invalid is present already
+                        if (max_occupied_width != self.occupied_strip_width[index]):
+                            #instantiate an invalid block now
+                            self.invalid_range[index] = [max_occupied_width, max_occupied_width + rectangle.width]
+                        else:
+                            #just extend the fill percentage
+                            self.occupied_strip_width[index] += rectangle.width
 
                 return max_occupied_width, self.strip_height_off[even_row_num]
             else: # 16 blocks

@@ -38,3 +38,4 @@ if __name__ == '__main__':
         plot_stats(stats, 3, 'equifill_add_n_comp')
         plot_stats(stats, 4, 'alternate_add_n_comp')
         plot_stats(stats, 5, 'alternate_max')
+        plot_stats(stats, 6, 'alternate_initiated')
