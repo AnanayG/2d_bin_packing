@@ -111,12 +111,16 @@ def run(visualize=True, seed=None):
     container.calculate_utilization()
     if visualize is True:
         container.visualize()
-    # print(container.perf_counters)
-    perf_counters = [container.perf_counters['EQUIFILL']['ADD_AND_COMP'], \
-                     container.perf_counters['ALTERNATE']['ADD_AND_COMP'],
-                     container.perf_counters['ALTERNATE']['MAX_OPERATION']]
+    try:
+        print(container.perf_counters)
+        perf_counters = [container.perf_counters['EQUIFILL']['ADD_AND_COMP'],
+                        container.perf_counters['ALTERNATE']['ADD_AND_COMP'],
+                        container.perf_counters['ALTERNATE']['MAX_OPERATION'], 
+                        container.perf_counters['ALTERNATE']['INITIATED']]
 
-    return [SEED, container.utilization_percentage, container.num_of_placed_rect] + perf_counters
+        return [SEED, container.utilization_percentage, container.num_of_placed_rect] + perf_counters
+    except AttributeError:
+        return [SEED, container.utilization_percentage, container.num_of_placed_rect]
 
 def plot_stats(stats):
     util = [stat[1] for stat in stats]
@@ -154,5 +158,5 @@ def multiple_runs(NUM_RUNS=None):
     dump_stats(stats)
 
 if __name__ == '__main__':
-    run(visualize=True, seed=8027613686809405079)
-    # multiple_runs()
+    # run(visualize=True, seed=8027613686809405079)
+    multiple_runs()

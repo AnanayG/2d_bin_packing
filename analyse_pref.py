@@ -34,6 +34,7 @@ if __name__ == '__main__':
     stats = read_stats_from_file(FILE_NAME)
 
     if stats is not None:
+        # plot_stats(stats, 1, 'util')
         plot_stats(stats, 3, 'equifill_add_n_comp')
         plot_stats(stats, 4, 'alternate_add_n_comp')
         plot_stats(stats, 5, 'alternate_max')

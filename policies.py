@@ -156,7 +156,7 @@ class CustomPolicy(Container):
         self.LATEST_STRIP_OFF = 0
 
         self.perf_counters = {'EQUIFILL'  :{'ADD_AND_COMP':0, 'INVALID_2_OPS':0, 'NON-INVALID_1_OP':0, 'NATIVE':0, 'ALTERNATE':0}, 
-                              'ALTERNATE' :{'ADD_AND_COMP':0, 'MAX_OPERATION':0}}
+                              'ALTERNATE' :{'ADD_AND_COMP':0, 'MAX_OPERATION':0, 'INITIATED':0}}
         super(CustomPolicy, self).__init__(*args, **kwargs)
 
     def native_search(self,rectangle):
@@ -251,6 +251,7 @@ class CustomPolicy(Container):
         Starting from the bottom, looks from a strip group (2 or 1 strip)
         where is enough width space to fit incoming rectangle
         '''
+        self.perf_counters['ALTERNATE']['INITIATED'] += 1
         for strip_grp_num, values_l in enumerate(self.strip_grouping):
             if len(values_l) == 2:
                 # if even strip has invalid
