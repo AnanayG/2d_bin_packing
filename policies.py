@@ -154,10 +154,15 @@ class CustomPolicy(Container):
     
         self.NUM_STRIPS = len(self.strip_heights)
         self.LATEST_STRIP_OFF = 0
-    
+
+        self.perf_counters = {'EQUIFILL'  :{'ADD_AND_COMP':0, 'INVALID_2_OPS':0, 'NON-INVALID_1_OP':0, 'NATIVE':0, 'ALTERNATE':0}, 
+                              'ALTERNATE' :{'ADD_AND_COMP':0, 'MAX_OPERATION':0}}
         super(CustomPolicy, self).__init__(*args, **kwargs)
 
     def native_search(self,rectangle):
+        '''
+        Returns if the rect can fit in (all of) its native rows 
+        '''
         if rectangle.height in [13,14,15]:
             rec_height = 16
         else:
@@ -173,45 +178,63 @@ class CustomPolicy(Container):
         return None, None
 
     def check_if_rect_fits_in_strip(self, strip_num, rectangle):
+        '''
+        for a given strip checks if the rectangle fits in the strip, with a consideration
+        for invalid range in that strip
+        '''
         if self.invalid_range[strip_num] is not None:
+            self.perf_counters['EQUIFILL']['INVALID_2_OPS']      += 1
             #BEFORE THE INVALID BLOCK
+            self.perf_counters['EQUIFILL']['ADD_AND_COMP'] += 1
             if(self.occupied_strip_width[strip_num] + rectangle.width <= self.invalid_range[strip_num][0]):
                 return strip_num, -1
             #AFTER THE INVALID BLOCK
+            self.perf_counters['EQUIFILL']['ADD_AND_COMP'] += 1
             if(self.invalid_range[strip_num][1] + rectangle.width <= self.width):
                 return strip_num, 1
         else:
+            self.perf_counters['EQUIFILL']['NON-INVALID_1_OP']  += 1
             #NO INVALID BLOCK PRESENT
+            self.perf_counters['EQUIFILL']['ADD_AND_COMP'] += 1
             if(self.occupied_strip_width[strip_num] + rectangle.width <= self.width):
                 return strip_num, None
         return None, None
     
     def equi_fill_search(self, rectangle):
+        '''
+        Returns if the rect can fit in (all of) its native rows and 
+        the alternative height strips.
+        Selects the one which is lesser filled globally 
+        '''
         if rectangle.height in [13,14,15]:
             rec_height = 16
         else:
             rec_height = rectangle.height
         
         possible_strip_index = []
-        #regular strip heights
+        #native strip heights SEARCH
         for strip_num, strip_h in enumerate(self.strip_heights):
             if strip_h == rec_height:
+                self.perf_counters['EQUIFILL']['NATIVE']      += 1
                 ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
                 if ret is not (None, None):
                     possible_strip_index.append(strip_num)
                 
-        #alternate strip heights
+        #alternate strip heights SEARCH
         for strip_num, strip_h_l in enumerate(self.strip_alternate_heights):
             for strip_h in strip_h_l:
                 if strip_h == rec_height:
+                    self.perf_counters['EQUIFILL']['ALTERNATE']      += 1
                     ret =  self.check_if_rect_fits_in_strip(strip_num, rectangle)
                     if ret is not (None, None):
-                        #ignore blocks in which invalid block is present
+                        #ignore blocks in which invalid block is present - NOT NEEDED
                         # if (ret[1] is None or (ret[1] is not None and ret[1]<0)):
                         possible_strip_index.append(strip_num)
         
         if len(possible_strip_index) != 0:
-            #compare fill percentage among options - get the  strip with min fill percent
+            # EQUIFILL SEARCH SUCCESSFUL
+            # compare fill percentage among options
+            # get the strip with min fill percent
             min_strip_index = possible_strip_index[0]
             fill_precent    = self.occupied_strip_width[min_strip_index]
             for strip_num in possible_strip_index:
@@ -224,6 +247,10 @@ class CustomPolicy(Container):
         return None, None
 
     def alternate_search(self, rectangle):
+        '''
+        Starting from the bottom, looks from a strip group (2 or 1 strip)
+        where is enough width space to fit incoming rectangle
+        '''
         for strip_grp_num, values_l in enumerate(self.strip_grouping):
             if len(values_l) == 2:
                 # if even strip has invalid
@@ -238,11 +265,14 @@ class CustomPolicy(Container):
                 else:
                     strip_occupied_o = self.occupied_strip_width[strip_grp_num*2+1]
 
+                self.perf_counters['ALTERNATE']['MAX_OPERATION'] += 1
                 max_occupied_width = max(strip_occupied_e, strip_occupied_o)
+                self.perf_counters['ALTERNATE']['ADD_AND_COMP'] += 1
                 if (rectangle.width <= self.width - max_occupied_width):
                     return strip_grp_num
             else: #fill into 16 blocks
                 index = strip_grp_num - self.NUM_STRIP_GROUPS
+                self.perf_counters['ALTERNATE']['ADD_AND_COMP'] += 1
                 if (rectangle.width <= self.width - self.occupied_strip_width[index]):
                     print("placing in 16 blocks at ", index)
                     return strip_grp_num
@@ -255,10 +285,11 @@ class CustomPolicy(Container):
         if max_x < 0 or max_y < 0:
             return None, None  # Rectangle is too large to fit
 
+        # EQUIFILL - SEARCH
         strip_num, loc = self.equi_fill_search(rectangle)
         print(rectangle.height, strip_num)
         if strip_num is not None:
-            # A strip is found.
+            # EQUIFILL - UPDATION
             if (loc == None or loc<0):
                 # (1) there is no invalid range in the strip, place the rect regularly
                 # (2) we are placing the new block before the invalid range
@@ -272,9 +303,11 @@ class CustomPolicy(Container):
                 return starting_pt, self.strip_height_off[strip_num]
 
 
+        # ALTERNATE - SEARCH
         strip_grp_num = self.alternate_search(rectangle)
         print("ALTERNATE", rectangle.height, strip_grp_num)
         if strip_grp_num is not None:
+            # ALTERNATE - UPDATION
             if strip_grp_num < self.LARGEST_STRIP_GRP_INDEX:
                 even_row_num, odd_row_num = 2*strip_grp_num, 2*strip_grp_num+1
 
@@ -303,4 +336,5 @@ class CustomPolicy(Container):
                 self.occupied_strip_width[index] = max_occupied_width + rectangle.width
                 return max_occupied_width, self.strip_height_off[index]
 
+        # FAILED - couldn't place
         return None, None

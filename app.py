@@ -43,6 +43,27 @@ class Container:
         # Show plot
         plt.show()
 
+    def generate_frames(self):
+        '''
+        Generates an image everytime a rect is placed
+        '''
+        for i in range(len(self.rectangles)):
+            fig, ax = plt.subplots()
+
+            # Draw container
+            ax.add_patch(plt.Rectangle((0, 0), self.width, self.height, linewidth=1, edgecolor='black', facecolor='none'))
+
+            # Draw rectangles
+            for i,rect in enumerate(self.rectangles[0:i]):
+                ax.add_patch(plt.Rectangle((rect.x, rect.y), rect.width, rect.height, linewidth=1, edgecolor='black', facecolor=(float(i/len(self.rectangles)),0,0)))
+
+            # Set axis limits
+            ax.set_xlim([0, self.width])
+            ax.set_ylim([0, self.height])
+
+            # Save frame
+            plt.savefig(f"out/frames/frame_{i}.png")
+
     def calculate_utilization(self):
         used_area = 0
         for rectangle in self.rectangles:
@@ -90,8 +111,12 @@ def run(visualize=True, seed=None):
     container.calculate_utilization()
     if visualize is True:
         container.visualize()
+    # print(container.perf_counters)
+    perf_counters = [container.perf_counters['EQUIFILL']['ADD_AND_COMP'], \
+                     container.perf_counters['ALTERNATE']['ADD_AND_COMP'],
+                     container.perf_counters['ALTERNATE']['MAX_OPERATION']]
 
-    return [SEED, container.utilization_percentage, container.num_of_placed_rect]
+    return [SEED, container.utilization_percentage, container.num_of_placed_rect] + perf_counters
 
 def plot_stats(stats):
     util = [stat[1] for stat in stats]
